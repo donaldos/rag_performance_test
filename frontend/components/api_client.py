@@ -3,7 +3,7 @@ FastAPI 서버 HTTP 호출 래퍼.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import requests
 
@@ -11,11 +11,15 @@ API_BASE = "http://localhost:8000"
 _TIMEOUT = 300  # RAG 호출은 오래 걸릴 수 있음
 
 
-def upload_pdf(file) -> Dict[str, Any]:
-    """POST /upload → { session_id, filename, file_size, pdf_type }"""
+def upload_pdfs(files: List) -> Dict[str, Any]:
+    """POST /upload — 다중 PDF 업로드 → { session_id, file_count, files, pdf_type }"""
+    multipart = [
+        ("files", (f.name, f.getvalue(), "application/pdf"))
+        for f in files
+    ]
     resp = requests.post(
         f"{API_BASE}/upload",
-        files={"file": (file.name, file.getvalue(), "application/pdf")},
+        files=multipart,
         timeout=_TIMEOUT,
     )
     resp.raise_for_status()

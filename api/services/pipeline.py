@@ -21,17 +21,23 @@ from api.models.pipeline import StepSummary
 def run_loading(state: SessionState, options: Optional[Dict[str, Any]] = None) -> StepSummary:
     loader_type = (options or {}).get("loader_type") or None
     t0 = time.time()
-    docs = PDFLoaderContext.LoadingPDFDatas(state.pdf_path, loader_type=loader_type)
+
+    # 다중 PDF를 각각 로딩한 후 합산
+    all_docs = []
+    for path in state.pdf_paths:
+        docs = PDFLoaderContext.LoadingPDFDatas(path, loader_type=loader_type)
+        all_docs.extend(docs)
+
     elapsed = (time.time() - t0) * 1000
 
-    state.docs = docs
-    state.pdf_type = docs[0].metadata.get("pdf_type", "") if docs else ""
+    state.docs = all_docs
+    state.pdf_type = all_docs[0].metadata.get("pdf_type", "") if all_docs else ""
     if "loading" not in state.completed_steps:
         state.completed_steps.append("loading")
 
-    detected_loader = docs[0].metadata.get("loader_type", loader_type or "auto") if docs else "auto"
+    detected_loader = all_docs[0].metadata.get("loader_type", loader_type or "auto") if all_docs else "auto"
     summary = StepSummary(
-        doc_count=len(docs),
+        doc_count=len(all_docs),
         loader_type=detected_loader,
         pdf_type=state.pdf_type,
         elapsed_ms=round(elapsed, 1),
@@ -40,6 +46,7 @@ def run_loading(state: SessionState, options: Optional[Dict[str, Any]] = None) -
         "doc_count": summary.doc_count,
         "loader_type": summary.loader_type,
         "pdf_type": summary.pdf_type,
+        "file_count": len(state.pdf_paths),
     }
     return summary
 

@@ -21,7 +21,7 @@ VectorStore = Any
 @dataclass
 class SessionState:
     session_id: str
-    pdf_path: str
+    pdf_paths: List[str]          # 업로드된 PDF 경로 목록 (다중 파일 지원)
     pdf_type: str = ""
     docs: List[Document] = field(default_factory=list)
     chunks: List[Document] = field(default_factory=list)
@@ -37,9 +37,9 @@ class SessionState:
 _sessions: Dict[str, SessionState] = {}
 
 
-def create_session(pdf_path: str) -> SessionState:
+def create_session(pdf_paths: List[str]) -> SessionState:
     session_id = str(uuid.uuid4())[:8]
-    state = SessionState(session_id=session_id, pdf_path=pdf_path)
+    state = SessionState(session_id=session_id, pdf_paths=pdf_paths)
     _sessions[session_id] = state
     return state
 
