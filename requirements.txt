@@ -1,0 +1,51 @@
+# ── Core ──────────────────────────────────────────────────────────────────────
+langchain>=0.3
+langchain-core>=0.3
+langchain-community>=0.3
+
+# ── PDF Loading: 텍스트 레이어 (text 유형) ─────────────────────────────────────
+PyMuPDF>=1.24                   # pymupdf 전략 + Router 사전 검사 (필수)
+pdfplumber>=0.11                # pdfplumber 전략
+
+# ── PDF Loading: 표 중심 (table 유형) ─────────────────────────────────────────
+camelot-py[cv]>=0.11            # camelot 전략 (opencv-python-headless 포함)
+                                # 시스템 의존성: ghostscript (brew install ghostscript)
+tabula-py>=2.9                  # tabula 전략
+                                # 시스템 의존성: Java (brew install openjdk)
+tabulate>=0.9                   # DataFrame.to_markdown() 지원 (camelot/tabula 공용)
+
+# ── PDF Loading: 그래프·이미지 포함 (graph 유형) ───────────────────────────────
+llama-parse>=0.5                # llamaparse 전략 (LLAMA_CLOUD_API_KEY 필요)
+unstructured[all-docs]>=0.15    # unstructured 전략
+
+# ── PDF Loading: 스캔 OCR (scan 유형) ─────────────────────────────────────────
+pytesseract>=0.3                # tesseract 전략
+                                # 시스템 의존성: tesseract-ocr (brew install tesseract tesseract-lang)
+pdf2image>=1.17                 # tesseract 전략 (PDF → 이미지 변환)
+                                # 시스템 의존성: poppler (brew install poppler)
+boto3>=1.34                     # textract 전략 (AWS_ACCESS_KEY_ID 등 환경변수 필요)
+azure-ai-formrecognizer>=3.3    # azure_di 전략 (AZURE_DI_ENDPOINT, AZURE_DI_KEY 필요)
+
+# ── Chunking ──────────────────────────────────────────────────────────────────
+langchain-text-splitters>=0.3   # recursive, token, sentence, markdown_header, parent_child 전략
+tiktoken>=0.7                   # token 전략 (cl100k_base 인코딩)
+sentence-transformers>=3.0      # sentence 전략
+langchain-experimental>=0.3     # semantic 전략 (SemanticChunker)
+
+# ── Embedding ─────────────────────────────────────────────────────────────────
+python-dotenv>=1.0              # config/.env 자동 로드
+langchain-openai>=0.2           # openai_small / openai_large 전략 (OPENAI_API_KEY 필요)
+langchain-huggingface>=0.1      # huggingface_ko 전략 (sentence-transformers 포함)
+
+# ── VectorDB ──────────────────────────────────────────────────────────────────
+faiss-cpu>=1.8                  # faiss 전략 (순수 벡터 검색, 대용량 최적화)
+chromadb>=0.5                   # chromadb 전략 (코사인 유사도, 메타데이터 필터링)
+# qdrant-client>=1.9            # 추가 대안 (Docker 또는 in-memory)
+# weaviate-client>=4.6          # 추가 대안 (Docker 필요)
+
+# ── Evaluation ────────────────────────────────────────────────────────────────
+ragas>=0.1
+deepeval>=0.21
+
+# ── Experiment Tracking ───────────────────────────────────────────────────────
+mlflow>=2.13
