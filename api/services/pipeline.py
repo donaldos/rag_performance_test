@@ -53,14 +53,10 @@ def run_loading(state: SessionState, options: Optional[Dict[str, Any]] = None) -
 
 def run_chunking(state: SessionState, options: Optional[Dict[str, Any]] = None) -> StepSummary:
     chunking_type = (options or {}).get("chunking_type") or None
-    chunk_size = int((options or {}).get("chunk_size", 500))
-    overlap = int((options or {}).get("overlap", 50))
     t0 = time.time()
     chunks = ChunkingContext.ChunkingDocs(
         state.docs,
         chunking_type=chunking_type,
-        chunk_size=chunk_size,
-        overlap=overlap,
     )
     elapsed = (time.time() - t0) * 1000
 

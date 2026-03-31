@@ -80,8 +80,6 @@ def render() -> None:
                            "semantic", "page", "markdown_header", "parent_child"]
         chunker_sel  = st.selectbox("청킹 전략", chunker_options, key="chunker_sel")
         chunking_type = None if chunker_sel == "자동 선택" else chunker_sel
-        chunk_size   = st.slider("청크 크기", 200, 2000, 500, key="chunk_size")
-        overlap      = st.slider("오버랩", 0, 200, 50, key="overlap")
 
         disabled = "loading" not in completed or "chunking" in completed
         if st.button("Chunking 실행", disabled=disabled):
@@ -89,8 +87,6 @@ def render() -> None:
                 try:
                     res = api_client.run_step(_session_id(), "chunking", {
                         "chunking_type": chunking_type,
-                        "chunk_size": chunk_size,
-                        "overlap": overlap,
                     })
                 except Exception as e:
                     st.error(f"오류: {e}")
