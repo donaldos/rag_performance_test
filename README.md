@@ -68,11 +68,11 @@ cp config/.env.example config/.env
 ### 전체 파이프라인 (① ~ ⑤)
 
 ```python
-from src.loading.pdf.loader_context import PDFLoaderContext
-from src.chunking.chunking_context import ChunkingContext
-from src.embedding.embedding_context import EmbeddingContext
-from src.vectordb.vectordb_context import VectorDBContext
-from src.rag.rag_context import RAGContext
+from ragsystem.loading.pdf.loader_context import PDFLoaderContext
+from ragsystem.chunking.chunking_context import ChunkingContext
+from ragsystem.embedding.embedding_context import EmbeddingContext
+from ragsystem.vectordb.vectordb_context import VectorDBContext
+from ragsystem.rag.rag_context import RAGContext
 
 # ① → ② → ③ → ④
 docs     = PDFLoaderContext.LoadingPDFDatas("data/01.pdf")
@@ -88,6 +88,12 @@ print(result["answer"])
 ### 수동 지정 (Router 우회)
 
 ```python
+from ragsystem.loading.pdf.loader_context import PDFLoaderContext
+from ragsystem.chunking.chunking_context import ChunkingContext
+from ragsystem.embedding.embedding_context import EmbeddingContext
+from ragsystem.vectordb.vectordb_context import VectorDBContext
+from ragsystem.rag.rag_context import RAGContext
+
 docs     = PDFLoaderContext.LoadingPDFDatas("file.pdf", loader_type="pymupdf")
 chunks   = ChunkingContext.ChunkingDocs(docs, chunking_type="recursive")
 embedded = EmbeddingContext.EmbeddingChunks(chunks, embedding_type="openai_small")
@@ -105,64 +111,64 @@ result   = RAGContext.ask(store, question="질문", rag_type="adaptive", llm_mod
 
 ```bash
 # PDF 로딩 + JSON 저장
-python -m src.test.test_pdf_loading data/01.pdf --loader pymupdf --save
+python -m tests.test_pdf_loading data/01.pdf --loader pymupdf --save
 
 # 로딩 결과 내용 확인 (PDF 없이 JSON으로 검사)
-python -m src.test.test_pdf_loading --input src/test/output/01_pymupdf_loading.json --inspect
+python -m tests.test_pdf_loading --input tests/output/01_pymupdf_loading.json --inspect
 
 # 모든 로더 일괄 비교
-python -m src.test.test_pdf_loading data/01.pdf --all
+python -m tests.test_pdf_loading data/01.pdf --all
 ```
 
 ### ② Chunking
 
 ```bash
 # 청킹 + JSON 저장
-python -m src.test.test_chunking --input src/test/output/01_pymupdf_loading.json --chunker recursive --save
+python -m tests.test_chunking --input tests/output/01_pymupdf_loading.json --chunker recursive --save
 
 # 결과 확인
-python -m src.test.test_chunking --input src/test/output/...json --inspect --chunk-index 0
+python -m tests.test_chunking --input tests/output/...json --inspect --chunk-index 0
 
 # 전체 전략 비교
-python -m src.test.test_chunking --input src/test/output/...json --all
+python -m tests.test_chunking --input tests/output/...json --all
 ```
 
 ### ③ Embedding
 
 ```bash
 # 임베딩 + JSON 저장
-python -m src.test.test_embedding --input src/test/output/..._chunking.json --embedder openai_small --save
+python -m tests.test_embedding --input tests/output/..._chunking.json --embedder openai_small --save
 
 # 벡터 미리보기
-python -m src.test.test_embedding --input src/test/output/..._chunking.json --inspect --chunk-index 0
+python -m tests.test_embedding --input tests/output/..._chunking.json --inspect --chunk-index 0
 ```
 
 ### ④ VectorDB
 
 ```bash
 # 인덱스 구축 + 검색 테스트
-python -m src.test.test_vectordb --input src/test/output/..._embedding.json --query "검색어"
+python -m tests.test_vectordb --input tests/output/..._embedding.json --query "검색어"
 
 # 특정 DB 지정
-python -m src.test.test_vectordb --input ...json --db faiss --query "검색어"
+python -m tests.test_vectordb --input ...json --db faiss --query "검색어"
 ```
 
 ### ⑤ RAG (LangGraph)
 
 ```bash
 # Self-RAG (기본)
-python -m src.test.test_rag \
-    --input src/test/output/..._embedding.json \
+python -m tests.test_rag \
+    --input tests/output/..._embedding.json \
     --query "질문 텍스트"
 
 # 세 가지 워크플로우 일괄 비교
-python -m src.test.test_rag \
-    --input src/test/output/..._embedding.json \
+python -m tests.test_rag \
+    --input tests/output/..._embedding.json \
     --query "질문 텍스트" \
     --rag all
 
 # 파라미터 조정
-python -m src.test.test_rag \
+python -m tests.test_rag \
     --input ...json \
     --query "질문" \
     --rag adaptive \
@@ -270,38 +276,50 @@ route_question ──(general)──→ direct_generate → END
 
 ```
 evalRAG/
+├── ragsystem/         ← RAG 파이프라인 핵심 로직 (pip install -e . 로 패키지화)
+│   ├── loading/pdf/   ← PDF 로더 (Router + 9개 전략)
+│   ├── chunking/      ← 청킹 (Router + 7개 전략)
+│   ├── embedding/     ← 임베딩 (Router + 3개 전략)
+│   ├── vectordb/      ← VectorDB (Router + FAISS/ChromaDB)
+│   ├── rag/           ← LangGraph RAG 워크플로우
+│   │   ├── simple_rag/    ← retrieve → generate
+│   │   ├── self_rag/      ← + grade, rewrite, hallucination check
+│   │   ├── adaptive_rag/  ← + route_question, direct_generate
+│   │   ├── rag_context.py ← 통합 진입점 (rag_type 파라미터)
+│   │   └── state.py       ← 공통 GraphState
+│   └── utils/         ← 공통 유틸 (logger)
+├── api/               ← FastAPI 서버 (스켈레톤)
+│   ├── main.py
+│   ├── routers/       ← upload.py, pipeline.py, rag.py
+│   ├── models/        ← Pydantic 요청/응답 모델
+│   └── services/      ← session_service.py
+├── frontend/          ← Streamlit UI (스켈레톤)
+│   ├── app.py
+│   ├── pages/         ← upload.py, pipeline.py, rag.py
+│   └── components/    ← step_card.py, result_table.py, api_client.py
+├── tests/             ← 단계별 테스트 스크립트 + io_utils
+│   └── output/        ← 단계별 결과 JSON 저장
 ├── config/
-│   ├── .env.example        ← API 키 템플릿
-│   └── .env                ← 실제 키 (git 제외)
-├── data/                   ← 테스트용 PDF 파일
+│   ├── .env.example   ← API 키 템플릿
+│   └── .env           ← 실제 키 (git 제외)
+├── data/              ← 테스트용 PDF 파일
 ├── logs/
-│   └── rag_pipeline.log    ← 파이프라인 실행 로그 (DEBUG+)
-├── src/
-│   ├── loading/pdf/        ← PDF 로더 (Router + 9개 전략)
-│   ├── chunking/           ← 청킹 (Router + 7개 전략)
-│   ├── embedding/          ← 임베딩 (Router + 3개 전략)
-│   ├── vectordb/           ← VectorDB (Router + FAISS/ChromaDB)
-│   ├── rag/                ← LangGraph RAG 워크플로우
-│   │   ├── simple_rag/     ← retrieve → generate
-│   │   ├── self_rag/       ← + grade, rewrite, hallucination check
-│   │   ├── adaptive_rag/   ← + route_question, direct_generate
-│   │   ├── rag_context.py  ← 통합 진입점 (rag_type 파라미터)
-│   │   └── state.py        ← 공통 GraphState
-│   ├── utils/              ← 공통 유틸 (logger)
-│   └── test/               ← 단계별 테스트 스크립트 + io_utils
+│   └── rag_pipeline.log ← 파이프라인 실행 로그 (DEBUG+)
+├── pyproject.toml     ← 패키지 설정
 ├── requirements.txt
 └── CLAUDE.md
 ```
 
 ### 각 모듈 상세
 
-- [src/loading/pdf/README.md](src/loading/pdf/README.md) — PDF 로더 가이드
-- [src/chunking/README.md](src/chunking/README.md) — 청킹 전략 가이드
-- [src/embedding/README.md](src/embedding/README.md) — 임베딩 모델 가이드
-- [src/vectordb/README.md](src/vectordb/README.md) — VectorDB 구축·검색 가이드
-- [src/rag/simple_rag/SKILL.md](src/rag/simple_rag/SKILL.md) — Simple RAG 가이드
-- [src/rag/self_rag/SKILL.md](src/rag/self_rag/SKILL.md) — Self-RAG 가이드
-- [src/rag/adaptive_rag/SKILL.md](src/rag/adaptive_rag/SKILL.md) — Adaptive RAG 가이드
+- [ragsystem/loading/pdf/README.md](ragsystem/loading/pdf/README.md) — PDF 로더 가이드
+- [ragsystem/chunking/README.md](ragsystem/chunking/README.md) — 청킹 전략 가이드
+- [ragsystem/embedding/README.md](ragsystem/embedding/README.md) — 임베딩 모델 가이드
+- [ragsystem/vectordb/README.md](ragsystem/vectordb/README.md) — VectorDB 구축·검색 가이드
+- [ragsystem/rag/simple_rag/SKILL.md](ragsystem/rag/simple_rag/SKILL.md) — Simple RAG 가이드
+- [ragsystem/rag/self_rag/SKILL.md](ragsystem/rag/self_rag/SKILL.md) — Self-RAG 가이드
+- [ragsystem/rag/adaptive_rag/SKILL.md](ragsystem/rag/adaptive_rag/SKILL.md) — Adaptive RAG 가이드
+- [tests/README.md](tests/README.md) — 테스트 스크립트 사용 가이드
 
 ---
 

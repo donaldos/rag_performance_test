@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "evalrag"
+version = "0.1.0"
+description = "PDF RAG Pipeline — loading / chunking / embedding / vectordb / rag"
+requires-python = ">=3.9"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ragsystem*", "api*", "frontend*"]
