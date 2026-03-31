@@ -1,6 +1,6 @@
 # evalRAG — PDF RAG Pipeline
 
-PDF 문서를 로딩부터 VectorDB 구축까지 처리하고, 각 단계를 독립적으로 평가하는 RAG 파이프라인.
+PDF 문서를 로딩부터 LLM 답변 생성까지 처리하고, 각 단계를 독립적으로 평가하는 RAG 파이프라인.
 
 ---
 
@@ -22,12 +22,17 @@ PDF
 ④ VectorDB  → VectorStore          faiss / chromadb
  │
  ▼
-⑤ Evaluation (예정)                RAGAS / DeepEval / MLflow
+⑤ RAG       → 최종 답변             simple / self / adaptive  ← LangGraph
+ │
+ ▼
+⑥ Evaluation (예정)                RAGAS / DeepEval / MLflow
 ```
 
-각 단계는 **Router + Strategy 패턴**으로 구현되어 있다.
+① ~ ④ 각 단계는 **Router + Strategy 패턴**으로 구현되어 있다.
 `*_type=None` 이면 Router가 입력 특성을 분석하여 최적 구현체를 자동 선택하고,
 `*_type="명시"` 이면 Router를 우회한다.
+
+⑤ RAG 단계는 **LangGraph** 기반 워크플로우로 `rag_type` 파라미터로 교체할 수 있다.
 
 ---
 
@@ -60,14 +65,14 @@ cp config/.env.example config/.env
 
 ## 빠른 시작
 
-### 전체 파이프라인
+### 전체 파이프라인 (① ~ ⑤)
 
 ```python
 from src.loading.pdf.loader_context import PDFLoaderContext
 from src.chunking.chunking_context import ChunkingContext
 from src.embedding.embedding_context import EmbeddingContext
 from src.vectordb.vectordb_context import VectorDBContext
-from langchain_core.documents import Document
+from src.rag.rag_context import RAGContext
 
 # ① → ② → ③ → ④
 docs     = PDFLoaderContext.LoadingPDFDatas("data/01.pdf")
@@ -75,13 +80,9 @@ chunks   = ChunkingContext.ChunkingDocs(docs)
 embedded = EmbeddingContext.EmbeddingChunks(chunks)
 store    = VectorDBContext.BuildVectorDB(embedded)
 
-# 검색
-query_vec = EmbeddingContext.EmbeddingChunks(
-    [Document(page_content="질문 텍스트")]
-)[0].embedding
-results = VectorDBContext.Search(store, query_vec, k=5)
-for r in results:
-    print(r.rank, r.score, r.document.page_content[:80])
+# ⑤ RAG 답변 생성 (rag_type: "simple" | "self" | "adaptive")
+result = RAGContext.ask(store, question="질문 텍스트", rag_type="self")
+print(result["answer"])
 ```
 
 ### 수동 지정 (Router 우회)
@@ -91,6 +92,7 @@ docs     = PDFLoaderContext.LoadingPDFDatas("file.pdf", loader_type="pymupdf")
 chunks   = ChunkingContext.ChunkingDocs(docs, chunking_type="recursive")
 embedded = EmbeddingContext.EmbeddingChunks(chunks, embedding_type="openai_small")
 store    = VectorDBContext.BuildVectorDB(embedded, vectordb_type="chromadb")
+result   = RAGContext.ask(store, question="질문", rag_type="adaptive", llm_model="gpt-4o")
 ```
 
 ---
@@ -145,6 +147,71 @@ python -m src.test.test_vectordb --input src/test/output/..._embedding.json --qu
 python -m src.test.test_vectordb --input ...json --db faiss --query "검색어"
 ```
 
+### ⑤ RAG (LangGraph)
+
+```bash
+# Self-RAG (기본)
+python -m src.test.test_rag \
+    --input src/test/output/..._embedding.json \
+    --query "질문 텍스트"
+
+# 세 가지 워크플로우 일괄 비교
+python -m src.test.test_rag \
+    --input src/test/output/..._embedding.json \
+    --query "질문 텍스트" \
+    --rag all
+
+# 파라미터 조정
+python -m src.test.test_rag \
+    --input ...json \
+    --query "질문" \
+    --rag adaptive \
+    --llm gpt-4o \
+    --k 10 \
+    --db faiss
+```
+
+---
+
+## RAG 워크플로우
+
+### 워크플로우 비교
+
+| rag_type | 구성 노드 | 특징 |
+|----------|-----------|------|
+| `simple` | retrieve → generate | 빠름, 환각 검증 없음 |
+| `self` | retrieve → grade → generate → hallucination check | 관련성 필터 + 환각 검증 |
+| `adaptive` | route → (direct_generate \| self 경로) | 일반 질문은 VectorDB 검색 생략 |
+
+### Self-RAG 흐름
+
+```
+retrieve → grade_documents ──(relevant)──→ generate → check_hallucination → END
+                │                                              │
+           (irrelevant)                               (hallucinated)
+                │                                              │
+          rewrite_query ──→ retrieve (재시도, 최대 2회)    generate (재시도)
+```
+
+### Adaptive RAG 흐름
+
+```
+route_question ──(general)──→ direct_generate → END
+      │
+  (vectorstore)
+      │
+   (Self-RAG 동일 경로)
+```
+
+### `--rag all` 비교 출력 예시
+
+```
+  rag_type      소요(ms)   답변(자)  retry  관련성      환각        route
+  simple          2,855        83      0
+  self            9,132        83      0    relevant   grounded
+  adaptive        7,918       427      0               grounded    general
+```
+
 ---
 
 ## 라우팅 동작
@@ -178,6 +245,13 @@ python -m src.test.test_vectordb --input ...json --db faiss --query "검색어"
 | `en` | 한글 비율 < 5% | `openai_small` |
 | `mixed` | 한글 비율 5~20% | `openai_small` |
 
+### VectorDB 자동 선택
+
+| 조건 | 1순위 |
+|------|-------|
+| 청크 수 < 500 | `chromadb` |
+| 청크 수 ≥ 500 | `faiss` |
+
 ---
 
 ## 평가 품질 게이트
@@ -207,6 +281,12 @@ evalRAG/
 │   ├── chunking/           ← 청킹 (Router + 7개 전략)
 │   ├── embedding/          ← 임베딩 (Router + 3개 전략)
 │   ├── vectordb/           ← VectorDB (Router + FAISS/ChromaDB)
+│   ├── rag/                ← LangGraph RAG 워크플로우
+│   │   ├── simple_rag/     ← retrieve → generate
+│   │   ├── self_rag/       ← + grade, rewrite, hallucination check
+│   │   ├── adaptive_rag/   ← + route_question, direct_generate
+│   │   ├── rag_context.py  ← 통합 진입점 (rag_type 파라미터)
+│   │   └── state.py        ← 공통 GraphState
 │   ├── utils/              ← 공통 유틸 (logger)
 │   └── test/               ← 단계별 테스트 스크립트 + io_utils
 ├── requirements.txt
@@ -219,6 +299,9 @@ evalRAG/
 - [src/chunking/README.md](src/chunking/README.md) — 청킹 전략 가이드
 - [src/embedding/README.md](src/embedding/README.md) — 임베딩 모델 가이드
 - [src/vectordb/README.md](src/vectordb/README.md) — VectorDB 구축·검색 가이드
+- [src/rag/simple_rag/SKILL.md](src/rag/simple_rag/SKILL.md) — Simple RAG 가이드
+- [src/rag/self_rag/SKILL.md](src/rag/self_rag/SKILL.md) — Self-RAG 가이드
+- [src/rag/adaptive_rag/SKILL.md](src/rag/adaptive_rag/SKILL.md) — Adaptive RAG 가이드
 
 ---
 
