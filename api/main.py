@@ -7,7 +7,7 @@ FastAPI 서버 진입점.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import upload, pipeline, rag
+from api.routers import upload, pipeline, rag, vectordb
 
 app = FastAPI(
     title="evalRAG API",
@@ -25,6 +25,7 @@ app.add_middleware(
 app.include_router(upload.router,   prefix="/upload",   tags=["upload"])
 app.include_router(pipeline.router, prefix="/pipeline", tags=["pipeline"])
 app.include_router(rag.router,      prefix="/rag",      tags=["rag"])
+app.include_router(vectordb.router, prefix="/vectordb", tags=["vectordb"])
 
 
 @app.get("/health", tags=["health"])

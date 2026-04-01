@@ -47,6 +47,22 @@ def get_status(session_id: str) -> Dict[str, Any]:
     return resp.json()
 
 
+def search_vectordb(
+    session_id: str,
+    query: str,
+    k: int = 5,
+    embedding_type: Optional[str] = None,
+) -> Dict[str, Any]:
+    """POST /vectordb/search → { query, hits, total, embedding_type }"""
+    resp = requests.post(
+        f"{API_BASE}/vectordb/search",
+        json={"session_id": session_id, "query": query, "k": k, "embedding_type": embedding_type},
+        timeout=_TIMEOUT,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
 def ask_rag(
     session_id: str,
     question: str,
